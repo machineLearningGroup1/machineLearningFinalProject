@@ -1,9 +1,10 @@
-# Task 3 — Clustering Analysis
+# Task 3 — Clustering Analysis (Comprehensive Report)
 
-**算法:** K-Means / Gaussian Mixture Model (GMM)  
-**脚本:** `task3_kmeans.py` / `task3_gmm.py`  
+**数据集:** Predict Students' Dropout and Academic Success (UCI ID: 697)  
+**算法:** K-Means / GMM / Spectral Clustering / Agglomerative Hierarchical  
+**脚本:** `task3_kmeans.py` / `task3_gmm.py` / `task3_spectral.py` / `task3_hierarchical.py` / `task3_binary_crosstab.py`  
 **输入:** `full_preprocessed_data.csv`（4,424 × 91）  
-**输出:** 12 张可视化图表 + 2 份评估指标 CSV
+**输出:** 24 张可视化图表 + 4 份 CSV
 
 ---
 
@@ -16,297 +17,424 @@ full_preprocessed_data.csv (4424×91)
     ├─ Step 2  PCA 降维（89 维 → 24 维，保留 90.5% 方差）
     ├─ Step 3  t-SNE 嵌入（在 PCA 空间上，仅用于可视化）
     │
-    ├─ Step 4  K-Means 聚类
-    │   ├─ Elbow + Silhouette + CH + DB 确定最优 k
-    │   ├─ 训练最终模型 (k=3)
-    │   ├─ 5 项评估指标 + 交叉分析
-    │   └─ 可视化：Elbow / 指标图 / t-SNE 对比 / 热力图 / Silhouette 轮廓
+    ├─ 算法 1  K-Means（baseline）
+    ├─ 算法 2  GMM（概率模型，椭圆形簇）
+    ├─ 算法 3  Spectral Clustering（图论方法，非凸簇）
+    ├─ 算法 4  Agglomerative Hierarchical（Ward linkage，层次结构）
     │
-    └─ Step 5  GMM 聚类
-        ├─ BIC / AIC 搜索（k × covariance_type）
-        ├─ 训练 k=3, full 模型（与 K-Means 公平对比）
-        ├─ 同一套 5 项指标 + 交叉分析
-        ├─ 软分配概率分析
-        └─ 可视化：BIC-AIC / t-SNE 对比 / 热力图 / 软概率 / 三合一对比 / 指标柱状图
+    └─ 补充分析  二值特征 × 簇 交叉分析（卡方检验 + Cramér's V）
 ```
 
 ---
 
-## 2. 关键预处理决策及其理由
+## 2. 预处理决策及其理由
 
 ### 2.1 全量重新标准化
 
-Task 1 的 StandardScaler 仅在训练集（70%）上 fit，再 transform 全量数据，导致全量数据均值不精确为 0（偏差约 0.004）。聚类为无监督任务，不涉及 train/test 划分，因此在全量 4424 条数据上重新 `fit_transform`，使 23 个连续列均值精确为 0、标准差精确为 1。66 个二值列保持 0/1 不动。
+Task 1 的 StandardScaler 仅在训练集（70%）上 fit，导致全量数据均值不精确为 0（偏差约 0.004）。聚类为无监督任务，不涉及 train/test 划分，因此在全量 4424 条数据上重新 `fit_transform`，使 23 个连续列均值精确为 0、标准差精确为 1。66 个二值列保持 0/1。
 
 ### 2.2 PCA 降维（89 → 24 维）
 
-| 保留方差 | 所需主成分数 |
-|---------|------------|
-| 80% | 14 |
-| **90%** | **24** |
-| 95% | 34 |
+| 保留方差 | 所需主成分 | 用途 |
+|---------|----------|------|
+| 80% | 14 | 可选的激进降维 |
+| **90%** | **24** | **本任务选择** |
+| 95% | 34 | 保守 |
+| 98.5% | 50 | Task 2 的 t-SNE 预降维 |
 
-选择 90%（24 维）的理由：
-
-- **降噪：** 后 65 个主成分每个仅贡献 < 0.15% 方差，主要是噪声，保留它们会干扰聚类的距离计算
-- **缓解维度灾难：** 89 维空间中欧氏距离的区分力退化，降至 24 维后距离度量更有效
-- **处理冗余：** 1st/2nd sem 的 approved/grade 等高相关特征对（r > 0.84）被 PCA 自动合并到同一主成分中
-- **与 Task 2 的区别：** Task 2 用 PCA(50) 作为 t-SNE 的预降维（保守不丢信息），Task 3 用 PCA(24) 直接作为聚类输入空间（积极降噪）
+选择 90%（24 维）的理由：后 65 个主成分每个仅贡献 < 0.15% 方差，主要是噪声；89 维空间中欧氏距离区分力退化（维度灾难）；1st/2nd sem 的 approved/grade 等高相关特征对（r > 0.84）被自动合并；24 维对所有四个算法的参数估计都在合理范围内。
 
 ### 2.3 t-SNE 仅用于可视化
 
-t-SNE 的 2D 坐标**不作为聚类输入**。t-SNE 是非参数的、不保距的，只保留局部邻域关系，全局距离没有意义。聚类在 PCA 降维后的 24 维空间上进行，t-SNE 坐标仅用于结果的 2D 展示。
+t-SNE 坐标**不作为聚类输入**。t-SNE 不保全局距离，只保局部邻域。聚类在 PCA 24 维空间上进行，t-SNE 2D 坐标仅用于结果展示。
 
 ---
 
-## 3. 算法一：K-Means
+## 3. 算法原理
 
-### 3.1 算法原理
+### 3.1 K-Means
 
-K-Means 将 $n$ 个数据点划分到 $k$ 个簇中，最小化所有点到其所属簇质心的距离平方和（Inertia / WCSS）：
+**核心思想：** 将 $n$ 个数据点划分到 $k$ 个球形簇中，最小化所有点到其所属簇质心的距离平方和（Inertia）：
 
 $$J = \sum_{i=1}^{k} \sum_{x \in C_i} \|x - \mu_i\|^2$$
 
-通过交替执行两步迭代求解：
+**求解方法：** Lloyd 迭代算法（E-step 分配 + M-step 更新质心），配合 K-Means++ 智能初始化。
 
-- **E-step（分配）：** 每个点分配给最近的质心 → 硬分配（$\gamma \in \{0, 1\}$）
-- **M-step（更新）：** 每个簇的质心移到该簇所有点的均值位置
+**隐含假设：** 簇是球形的、大小相近的、边界是线性的（Voronoi 划分）。每个点硬分配（$\gamma \in \{0, 1\}$）到唯一的簇。
 
-K-Means 的隐含假设：簇是球形的、大小相近的、边界是线性的（Voronoi 划分）。
+**与该数据集的适配度：极高。** PCA 降维后簇形状接近球形，标准化保证了特征尺度一致，4424 条数据量级计算效率极高。K-Means 是最适合的 baseline 方法。
 
-### 3.2 选择 K-Means 的理由
+### 3.2 GMM（Gaussian Mixture Model）
 
-- 计算效率高，对 4424 条 × 24 维的数据完全适用
-- 数据已标准化，满足欧氏距离对特征尺度一致的要求
-- 结果可解释性强：每个簇有一个明确的质心，特征热力图直观展示各簇特征
-- 作为最经典的聚类算法，是 baseline 的首选
-
-### 3.3 超参数配置
-
-| 参数 | 值 | 说明 |
-|------|-----|------|
-| `n_clusters` | 2~8 搜索，最终选 3 | 由 Elbow + 三个内部指标共同确定 |
-| `init` | `k-means++` | 智能初始化，选择彼此远离的初始质心 |
-| `n_init` | 搜索阶段 10，最终模型 20 | 多次运行取 Inertia 最小的结果 |
-| `max_iter` | 300 | 最大迭代次数 |
-| `random_state` | 42 | 固定种子保证可复现 |
-
-### 3.4 确定最优 k
-
-#### Elbow Method
-
-Inertia 从 k=2 的 92121 降至 k=3 的 78448（下降 14.8%），之后 k=3→4 仅下降 4.8%，k=3 处为明显的斜率变缓拐点。
-
-#### 三个内部指标一致指向 k=3
-
-| k | Silhouette ↑ | Calinski-Harabasz ↑ | Davies-Bouldin ↓ |
-|---|-------------|--------------------|-----------------| 
-| 2 | 0.2753 | **1072.3** | 1.5619 |
-| **3** | **0.2956** | 1014.7 | **1.4421** |
-| 4 | 0.1401 | 785.2 | 2.2801 |
-| 5 | 0.1065 | 669.9 | 2.1504 |
-
-Silhouette 在 k=3 取最高值，Davies-Bouldin 在 k=3 取最低值，Calinski-Harabasz 虽在 k=2 最高但 k=3 非常接近（差距仅 5.3%）。综合三个指标，k=3 是明确的最优选择，且恰好对应真实的三分类数量（Dropout / Enrolled / Graduate）。
-
-### 3.5 K-Means (k=3) 聚类结果
-
-#### 簇与真实标签的交叉分析
-
-| 簇 | Dropout | Enrolled | Graduate | 合计 | 核心特征 |
-|----|---------|----------|----------|------|----------|
-| Cluster 0 | 64 (23.3%) | 36 (13.1%) | 175 (63.6%) | 275 | **高学分转入群**：1st/2nd Credited 高出均值 3.4σ |
-| Cluster 1 | **740 (82.0%)** | 86 (9.5%) | 76 (8.4%) | 902 | **学业困难群**：成绩和通过率低于均值 1.7σ |
-| Cluster 2 | 617 (19.0%) | 672 (20.7%) | 1958 (60.3%) | 3247 | **正常学业群**：各指标接近均值或略为正值 |
-
-Cluster 1 是 K-Means 最有价值的发现：82% 为 Dropout，但 1421 个 Dropout 中只有 740 个（52.1%）被捕获，其余散布在其他两个簇中。
-
-#### 评估指标
-
-| 指标 | 值 | 方向 |
-|------|-----|------|
-| Silhouette Score | 0.2956 | ↑ |
-| Calinski-Harabasz Index | 1014.72 | ↑ |
-| Davies-Bouldin Index | 1.4421 | ↓ |
-| Adjusted Rand Index (ARI) | 0.1700 | ↑ |
-| Normalized Mutual Info (NMI) | 0.1701 | ↑ |
-
-Silhouette = 0.30 属于"弱结构但有意义"范畴（0.26~0.50），ARI/NMI 偏低反映了 Enrolled 和 Graduate 在特征空间中高度重叠的客观现实。
-
----
-
-## 4. 算法二：GMM（Gaussian Mixture Model）
-
-### 4.1 算法原理
-
-GMM 假设数据由 $k$ 个高斯分布混合生成：
+**核心思想：** 假设数据由 $k$ 个高斯分布混合生成，每个高斯有独立的均值 $\mu_j$、协方差矩阵 $\Sigma_j$ 和混合权重 $\pi_j$：
 
 $$p(x) = \sum_{j=1}^{k} \pi_j \cdot \mathcal{N}(x \mid \mu_j, \Sigma_j)$$
 
-通过 EM 算法求解：
+**求解方法：** EM 算法（E-step 计算后验概率 $\gamma_{ij}$ → 软分配，M-step 加权更新参数）。
 
-- **E-step：** 计算每个点属于各高斯的后验概率 $\gamma_{ij}$（responsibility）→ 软分配（$\gamma \in [0, 1]$）
-- **M-step：** 用 $\gamma_{ij}$ 加权更新均值 $\mu_j$、协方差 $\Sigma_j$、混合权重 $\pi_j$
+**与 K-Means 的关系：** K-Means 是 GMM 的特例——当 $\Sigma_j = \sigma^2 I$（球形）且 $\gamma_{ij}$ 取极限值（硬分配）时，GMM 退化为 K-Means。
 
-K-Means 是 GMM 的特例：当 $\Sigma_j = \sigma^2 I$（球形）且 $\gamma$ 取极限值（硬分配）时，GMM 退化为 K-Means。
+**独特优势：** 椭圆形簇（full 协方差）；软聚类概率；BIC/AIC 模型选择。
 
-### 4.2 选择 GMM 的理由
+**与该数据集的适配度：中等。** 理论优势在此数据上未能发挥——PCA 降维后簇趋近球形，full 协方差的 974 个参数过多（K-Means 仅 72 个），软概率退化为硬分配（99.6% 学生 max prob ≥ 0.95）。
 
-- **椭圆形簇：** $\Sigma_j$ 允许各簇有不同的形状和方向，理论上更贴合真实数据分布
-- **软聚类：** 提供每个学生属于各簇的概率，在教育干预场景中有实际意义
-- **BIC/AIC 模型选择：** 作为概率模型，可用信息准则选 k，比 Elbow 更有统计学依据
-- **与 K-Means 的理论联系：** 作为 K-Means 的推广，两者对比能揭示数据结构的深层特征
+### 3.3 Spectral Clustering
 
-### 4.3 BIC / AIC 模型选择
+**核心思想：** 先构建样本间的相似度图（$n \times n$ 邻接矩阵），对图的拉普拉斯矩阵做特征分解（求前 $k$ 个最小特征值对应的特征向量），在低维特征向量空间中用 K-Means 聚类。
 
-对 k=2~8 × covariance_type={full, diag} 共 14 种配置做搜索。
+**构图方式：** 两种选择：
+- **nearest_neighbors**（用 $k$ 近邻构建稀疏图，本任务使用）
+- **rbf**（用高斯核函数构建全连接图，在高维数据上退化严重）
 
-关键发现：
+**独特优势：** 能发现任意形状（非凸）的簇，对流形结构敏感。
 
-- **BIC/AIC 最优：** k=7, full（BIC=131006）
-- **full 远优于 diag：** 同 k 值下 BIC 差距约 10 万，证实数据中存在显著的特征间相关结构
-- **但 BIC 最优不等于聚类最优：** k=7, full 的 Silhouette 仅 0.024，说明 BIC 优化的是概率密度估计质量而非聚类分离度
+**与该数据集的适配度：中等偏上。** nearest_neighbors 构图在 24 维 PCA 空间中表现稳健（三种 k=10/20/50 结果几乎一致），发现了 K-Means 看不到的小子群（177 人）。但 rbf 内核在 24 维空间中完全失败（4419/3/2 的退化分组），证实了高维空间中全局相似度度量的不可靠性。
 
-为与 K-Means 公平对比，使用 **k=3, covariance_type=full** 作为主分析模型。
+### 3.4 Agglomerative Hierarchical Clustering
 
-### 4.4 GMM (k=3, full) 聚类结果
+**核心思想：** 自底向上逐步合并最近的簇对，直到所有样本合并为一个簇。通过在指定高度"切割"Dendrogram 得到 $k$ 个簇。
 
-#### 簇与真实标签的交叉分析
+**Ward linkage 合并准则：** 每次合并使总簇内方差增量最小的两个簇：
 
-| 簇 | Dropout | Enrolled | Graduate | 合计 | 核心特征 |
-|----|---------|----------|----------|------|----------|
-| Cluster 0 | 386 (15.6%) | 482 (19.5%) | 1607 (64.9%) | 2475 | **正常学业群**：各指标接近均值 |
-| Cluster 1 | **722 (83.5%)** | 68 (7.9%) | 75 (8.7%) | 865 | **学业困难群**：成绩/通过率低于均值 1.7σ |
-| Cluster 2 | 313 (28.9%) | 244 (22.5%) | 527 (48.6%) | 1084 | **中间过渡群**：特征正值偏高，含较多转入学分学生 |
+$$\Delta = \frac{n_i \cdot n_j}{n_i + n_j} \|\mu_i - \mu_j\|^2$$
 
-#### 软分配概率分析
+这与 K-Means 最小化 Inertia 的目标**数学同源**——Ward 是 K-Means 的"自底向上版本"。
 
-| 概率区间 | 学生数 | 占比 |
-|---------|--------|------|
-| ≥ 0.95（高度确定） | 4407 | 99.6% |
-| 0.80~0.95（较确定） | 10 | 0.2% |
-| 0.60~0.80（中等确定） | 6 | 0.1% |
-| < 0.60（不确定） | 1 | 0.02% |
+**独特优势：** Dendrogram 提供完整的层次结构，不需要预设 $k$，可以同时看到所有粒度的分组方案。
 
-99.6% 的学生最大归属概率 ≥ 0.95，表明三个高斯分布之间几乎无重叠，软分配实质上退化为硬分配。
+**与该数据集的适配度：高。** Ward linkage 与 K-Means 目标同源，结果高度一致（交叉验证）。4424 条数据的距离矩阵 ~75MB，计算 0.6 秒，完全可承受。Dendrogram 揭示了 K-Means 无法提供的层次信息。
+
+**Linkage 方法对比的重要发现：** Average 和 Complete linkage 出现了"虚假高 Silhouette"现象（Silhouette 0.73，但 ARI ≈ 0），因为它们把几乎所有样本归入一个簇、极少数异常点单独分出。Ward 是唯一产生有意义聚类的 linkage 方法。
 
 ---
 
-## 5. 算法对比与最终结论
+## 4. 评估指标体系
 
-### 5.1 指标对比（k=3，同一份 PCA 24 维数据）
+### 4.1 通用指标（四个算法共用）
 
-| 指标 | K-Means | GMM (full) | 胜者 | 说明 |
-|------|---------|------------|------|------|
-| Silhouette ↑ | **0.2956** | 0.1639 | K-Means | 内部指标对 K-Means 有天然偏向 |
-| Calinski-Harabasz ↑ | **1014.72** | 675.27 | K-Means | 同上 |
-| Davies-Bouldin ↓ | **1.4421** | 2.8268 | K-Means | 同上 |
-| ARI ↑ | 0.1700 | **0.1775** | GMM | 唯一不依赖距离的指标，最公正 |
-| NMI ↑ | **0.1701** | 0.1559 | K-Means | |
+**内部指标（不需要真实标签）：**
 
-K-Means 在 5 项指标中的 4 项胜出。但需要注意 Silhouette/CH/DB 均基于欧氏距离计算，而 K-Means 的优化目标恰好就是最小化欧氏距离平方和——用同一套标准优化和评价，K-Means 在这些指标上天然占优。ARI 是最公正的比较指标（不依赖距离，纯比较标签一致性），GMM 在 ARI 上略胜。
+| 指标 | 公式核心 | 范围 | 方向 | 衡量内容 |
+|------|---------|------|------|---------|
+| Silhouette | $s(i) = \frac{b(i)-a(i)}{\max(a(i),b(i))}$ | [-1, 1] | ↑ | 每个点的簇内紧密度 vs 簇间分离度 |
+| Calinski-Harabasz | $\frac{SSB/(k-1)}{SSW/(n-k)}$ | [0, +∞) | ↑ | 簇间方差 vs 簇内方差的 F 统计量 |
+| Davies-Bouldin | $\frac{1}{k}\sum \max_{j \neq i}\frac{\sigma_i+\sigma_j}{d(\mu_i,\mu_j)}$ | [0, +∞) | ↓ | 最容易混淆的簇对的平均混淆度 |
 
-### 5.2 K-Means 优于 GMM 的原因分析
+**外部指标（需要真实标签）：**
 
-**（1）PCA 降维后簇形状趋近球形**
-
-GMM 的核心优势是椭圆形簇（full 协方差），但 PCA 将数据投影到正交不相关的主成分空间，原本沿"1st grade — 2nd grade"对角线拉伸的椭圆形分布被分解到不同主成分上，簇形状趋近球形。PCA 在帮助 K-Means 的同时削弱了 GMM 的椭圆形优势。
-
-**（2）参数量悬殊**
-
-24 维空间中，K-Means 每簇仅需 24 个参数（质心坐标），3 簇共 72 个；GMM (full) 每簇需 325 个参数（24 均值 + 300 协方差 + 1 权重），3 簇共 974 个——是 K-Means 的 13.5 倍。4424 条数据估计 974 个参数，样本量/参数量仅 4.5，估计精度受限。
-
-**（3）数据结构为"一硬两软"**
-
-两种算法都成功识别了一个高纯度退学簇（K-Means 82.0%, GMM 83.5%），但都无法区分 Graduate 和 Enrolled。数据中只有一个清晰的分界（学业困难 vs 正常），而非三个独立的簇。对于这种结构，K-Means 的线性切分已经足够，GMM 的弯曲边界没有额外收益。
-
-**（4）软概率退化为硬分配**
-
-GMM 的另一个理论优势——软聚类概率——在这份数据上几乎完全退化（99.6% 学生最大概率 ≥ 0.95）。三个高斯之间的密度谷极深，E-step 的 $\gamma_{ij}$ 要么接近 1 要么接近 0，等效于 K-Means 的硬分配。
-
-### 5.3 GMM 分析的独立价值
-
-尽管 GMM 在指标上不如 K-Means，其分析过程仍揭示了有价值的信息：
-
-- **BIC: full >> diag**（差距约 10 万），证实数据中确实存在显著的特征间相关结构（如 1st/2nd sem 成绩的高相关性），但这种结构在 PCA 后被线性化了
-- **软概率分析确认了簇边界的清晰性**，排除了"类别重叠导致聚类困难"的假设——问题不在于边界模糊，而在于 Enrolled 和 Graduate 本身就没有不同的聚类结构
-- **GMM 退学簇纯度（83.5%）略高于 K-Means（82.0%）**，说明椭圆形边界在退学群的刻画上确实有微弱优势
-
-### 5.4 最终结论
-
-**K-Means 是该数据集上更优的聚类方法。** 在 PCA 降维后的 24 维空间中，数据的簇结构接近球形、边界清晰（一硬两软），K-Means 的简单模型恰好匹配这种结构，而 GMM 的额外灵活性（椭圆形、软概率）没有带来实质性提升，反而因参数量大而付出了代价。
-
-两种算法的共同发现构成了对该数据集聚类结构的稳健结论：
-
-1. 学业困难学生（主要是 Dropout）在特征空间中形成了一个可识别的独立群体
-2. Graduate 和 Enrolled 在学业特征上高度重叠，无监督方法无法区分这两类
-3. 上述发现与 Task 2 t-SNE 可视化的观察完全一致，形成了跨任务的交叉验证
-
----
-
-## 6. 与 Task 2（t-SNE）的衔接
-
-| Task 2 观察 | Task 3 量化验证 |
-|------------|----------------|
-| Graduate 和 Dropout 在 t-SNE 图中有空间分离 | K-Means Cluster 1 的 Dropout 纯度达 82% |
-| Enrolled 散布在两者之间，无独立聚集 | ARI/NMI 偏低（~0.17），因为 Enrolled 无法被单独识别 |
-| 版本 A（23 连续特征）比版本 B（全 89 列）分离度更好 | PCA 降维后聚类效果优于高维原始空间 |
-| perplexity=5/30/50 下 Graduate-Dropout 分离均稳定 | K-Means 和 GMM 都稳定地识别出退学群 |
-
-Task 3 的聚类标签在 Task 2 的 t-SNE 坐标上着色后，与真实标签的着色模式存在部分对应，直观验证了聚类结果的合理性。
-
----
-
-## 7. 评估指标原理速查
-
-### 内部指标（不需要真实标签）
-
-| 指标 | 公式核心 | 范围 | 最优方向 |
-|------|---------|------|---------|
-| Silhouette | $s(i) = \frac{b(i)-a(i)}{\max(a(i),b(i))}$ | [-1, 1] | ↑ |
-| Calinski-Harabasz | $\frac{SSB/(k-1)}{SSW/(n-k)}$ | [0, +∞) | ↑ |
-| Davies-Bouldin | $\frac{1}{k}\sum \max_{j \neq i}\frac{\sigma_i+\sigma_j}{d(\mu_i,\mu_j)}$ | [0, +∞) | ↓ |
-
-### 外部指标（需要真实标签）
-
-| 指标 | 含义 | 范围 | 最优方向 |
-|------|------|------|---------|
+| 指标 | 含义 | 范围 | 方向 |
+|------|------|------|------|
 | ARI | 聚类标签和真实标签的配对一致性（修正随机期望） | [-1, 1] | ↑ |
 | NMI | 聚类标签和真实标签的互信息（归一化） | [0, 1] | ↑ |
 
-### GMM 特有指标
+### 4.2 GMM 特有指标
 
-| 指标 | 公式核心 | 最优方向 |
-|------|---------|---------|
-| BIC | $-2\log L + p \cdot \log n$ | ↓ |
-| AIC | $-2\log L + 2p$ | ↓ |
+| 指标 | 公式核心 | 方向 | 说明 |
+|------|---------|------|------|
+| BIC | $-2\log L + p \cdot \log n$ | ↓ | 平衡拟合度和模型复杂度，惩罚较重 |
+| AIC | $-2\log L + 2p$ | ↓ | 惩罚较轻，倾向更复杂的模型 |
 
----
+### 4.3 指标偏向性警告
 
-## 8. 输出文件清单
-
-### K-Means 输出
-
-| 文件名 | 内容 |
-|--------|------|
-| `fig1_elbow_method.png` | Elbow Method（Inertia vs k） |
-| `fig2_silhouette_scores.png` | 三合一内部指标对比（Silhouette / CH / DB） |
-| `fig3_kmeans_tsne_comparison.png` | t-SNE：真实标签 vs K-Means 聚类标签 |
-| `fig4_kmeans_cluster_profiles.png` | K-Means 各簇特征均值热力图 |
-| `fig5_kmeans_silhouette_detail.png` | Silhouette 轮廓图（k=3） |
-| `fig6_pca_variance.png` | PCA 累计方差解释图 |
-| `task3_kmeans_results.csv` | 各 k 值的评估指标汇总 |
-
-### GMM 输出
-
-| 文件名 | 内容 |
-|--------|------|
-| `fig7_bic_aic.png` | BIC/AIC vs k（full / diag 两种协方差） |
-| `fig8_gmm_tsne_comparison.png` | t-SNE：真实标签 vs GMM 聚类标签 |
-| `fig9_gmm_cluster_profiles.png` | GMM 各簇特征均值热力图 |
-| `fig10_gmm_soft_assignment.png` | 软分配概率分析（直方图 + 边界学生） |
-| `fig11_gmm_vs_kmeans_tsne.png` | 三合一 t-SNE 对比（Truth / K-Means / GMM） |
-| `fig12_final_comparison.png` | 最终综合评估指标柱状图 |
-| `task3_gmm_results.csv` | 各 k × cov_type 的评估指标汇总 |
+Silhouette / CH / DB 三个内部指标全部基于欧氏距离。K-Means 的优化目标恰好就是最小化欧氏距离平方和，因此**这三个指标天然偏向 K-Means**。ARI 和 NMI 不依赖距离计算，是跨算法对比中最公正的指标。
 
 ---
 
+## 5. 实验结果
+
+### 5.1 K-Means 参数选择
+
+#### Elbow Method
+
+Inertia 从 k=2 的 92121 降至 k=3 的 78448（下降 14.8%），之后 k=3→4 仅下降 4.8%，k=3 处为明显拐点。
+
+#### 三个内部指标一致指向 k=3
+
+| k | Silhouette ↑ | CH ↑ | DB ↓ | ARI ↑ | NMI ↑ |
+|---|-------------|------|------|-------|-------|
+| 2 | 0.2753 | **1072.3** | 1.5619 | 0.1923 | 0.1975 |
+| **3** | **0.2956** | 1014.7 | **1.4421** | 0.1700 | 0.1701 |
+| 4 | 0.1401 | 785.2 | 2.2801 | 0.3388 | 0.2499 |
+
+### 5.2 GMM 的 BIC/AIC 搜索
+
+BIC/AIC 最优为 k=7, full（BIC=131006），但 Silhouette 仅 0.024，说明 BIC 优化的是概率密度估计质量而非聚类分离度。关键发现：**full 协方差远优于 diag（BIC 差距约 10 万）**，证实数据存在显著的特征间相关结构。
+
+为公平对比，使用 k=3, full 作为 GMM 的主分析模型。
+
+### 5.3 Spectral Clustering 参数搜索
+
+| 配置 | Silhouette | ARI | NMI | 簇分布 |
+|------|-----------|-----|-----|--------|
+| **NN k=10** | 0.224 | **0.170** | **0.211** | 3571/676/177 |
+| NN k=20 | 0.223 | 0.162 | 0.206 | 3594/651/179 |
+| NN k=50 | 0.224 | 0.164 | 0.208 | 3587/657/180 |
+| RBF γ=0.1 | 0.646 | -0.001 | 0.002 | 4419/3/2 |
+
+nearest_neighbors 三种参数结果极其稳定；RBF 完全失败（99.9% 归入一个簇，Silhouette 虚高是陷阱）。
+
+### 5.4 Hierarchical Linkage 对比
+
+| Linkage | k | Silhouette | ARI | NMI |
+|---------|---|-----------|-----|-----|
+| **Ward** | 3 | 0.2720 | **0.1485** | **0.1523** |
+| Complete | 3 | 0.3295 | -0.0108 | 0.0036 |
+| Average | 3 | 0.6332 | -0.0012 | 0.0021 |
+
+Average/Complete 的高 Silhouette 是虚假的——它们把几乎所有样本归入一个簇。Ward 是唯一稳健的 linkage 方法。
+
+### 5.5 四算法最终对比（k=3）
+
+| 指标 | K-Means | GMM (full) | Spectral (NN) | Hierarchical (Ward) | 最优 |
+|------|---------|------------|---------------|---------------------|------|
+| Silhouette ↑ | **0.2956** | 0.1639 | 0.2238 | 0.2720 | K-Means |
+| CH ↑ | **1014.72** | 675.27 | 585.92 | 908.69 | K-Means |
+| DB ↓ | **1.4421** | 2.8268 | 1.6163 | 1.4727 | K-Means |
+| ARI ↑ | 0.1700 | **0.1775** | 0.1697 | 0.1485 | GMM |
+| NMI ↑ | 0.1701 | 0.1559 | **0.2106** | 0.1523 | Spectral |
+| Dropout 簇纯度 | 82.0% | 83.5% | **92.9%** | 82.3% | Spectral |
+
+---
+
+## 6. 各算法的聚类结果对比
+
+### 6.1 K-Means (k=3)
+
+| 簇 | 人数 | Dropout | Enrolled | Graduate | 核心特征 |
+|----|------|---------|----------|----------|----------|
+| Cluster 0 | 275 | 23.3% | 13.1% | 63.6% | **高学分转入群**：1st/2nd Credited +3.4σ |
+| Cluster 1 | 902 | **82.0%** | 9.5% | 8.4% | **学业困难群**：成绩/通过率 -1.7σ |
+| Cluster 2 | 3247 | 19.0% | 20.7% | 60.3% | **正常学业群**：各指标接近均值 |
+
+### 6.2 GMM (k=3, full)
+
+| 簇 | 人数 | Dropout | Enrolled | Graduate | 核心特征 |
+|----|------|---------|----------|----------|----------|
+| Cluster 0 | 2475 | 15.6% | 19.5% | 64.9% | **正常学业群** |
+| Cluster 1 | 865 | **83.5%** | 7.9% | 8.7% | **学业困难群**：与 K-Means Cluster 1 类似 |
+| Cluster 2 | 1084 | 28.9% | 22.5% | 48.6% | **中间过渡群**：特征正值偏高 |
+
+### 6.3 Spectral (NN k=10)
+
+| 簇 | 人数 | Dropout | Enrolled | Graduate | 核心特征 |
+|----|------|---------|----------|----------|----------|
+| Cluster 0 | 3571 | 20.1% | 20.1% | 59.7% | **主体学生群** |
+| Cluster 1 | 676 | **92.9%** | 7.0% | 0.1% | **高纯度退学群**（四算法最高纯度） |
+| Cluster 2 | 177 | 41.8% | 15.8% | 42.4% | **成绩好但缺考群**（独特发现） |
+
+### 6.4 Hierarchical (Ward, k=3)
+
+| 簇 | 人数 | Dropout | Enrolled | Graduate | 核心特征 |
+|----|------|---------|----------|----------|----------|
+| Cluster 0 | 3271 | 19.9% | 20.7% | 59.4% | **正常学业群** |
+| Cluster 1 | 830 | **82.3%** | 8.6% | 9.2% | **学业困难群**：与 K-Means Cluster 1 几乎一致 |
+| Cluster 2 | 323 | 26.9% | 13.9% | 59.1% | **高学分转入群**：与 K-Means Cluster 0 一致 |
+
+---
+
+## 7. 二值特征 × 簇 交叉分析
+
+### 7.1 卡方检验关联强度（Cramér's V）Top 10
+
+| 特征 | Cramér's V | 效应量 | 含义 |
+|------|-----------|--------|------|
+| **no_eval_sem2** | **0.819** | 极强 | 第二学期是否完全缺考 |
+| **no_eval_sem1** | **0.734** | 极强 | 第一学期是否完全缺考 |
+| Course_171 | 0.379 | 中等偏强 | 特定专业的退学关联 |
+| Tuition fees up to date | 0.278 | 中等 | 学费缴纳状态 |
+| Application mode_53 | 0.273 | 中等 | 特定入学渠道 |
+| Application mode_43 | 0.243 | 中等 | 继续教育转入 |
+| economic_stress | 0.241 | 中等 | 经济压力综合标志 |
+| Gender | 0.202 | 中等 | 性别 |
+| Scholarship holder | 0.201 | 中等 | 奖学金持有 |
+| Application mode_39 | 0.194 | 中等 | 特定入学渠道 |
+
+### 7.2 K-Means Cluster 1（学业困难群）的完整画像
+
+**连续特征异常（热力图）：**
+- 1st/2nd Grade: -1.70 / -1.83σ
+- 1st/2nd Approved: -1.38 / -1.44σ
+- Pass Rate S1/S2: -1.70 / -1.68σ
+
+**二值特征异常（交叉分析）：**
+- no_eval_sem2: 74.3%（全局 15.6%，↑58.7pp）
+- no_eval_sem1: 59.5%（全局 12.2%，↑47.4pp）
+- Tuition fees up to date: 70.3%（全局 88.1%，↓17.8pp）
+- Gender（男性）: 54.1%（全局 35.2%，↑18.9pp）
+- economic_stress: 35.7%（全局 17.7%，↑18.0pp）
+
+**核心洞察：** 这个群体的低成绩本质是大量缺考（grade=0 因为未参加考试），不是真正的低分。正确的解读是"学业失联"而非"学业能力差"——这是教育干预层面完全不同的问题。Task 1 中构建的 `no_eval` 标志在聚类分析中验证了其关键价值。
+
+---
+
+## 8. 结构性发现
+
+### 8.1 数据的"一硬两软"结构
+
+四个算法的共同发现：
+
+- **一个硬边界：** 学业困难/失联学生（主要是 Dropout）vs 正常学业学生之间存在清晰的分界
+- **两个软边界：** Graduate 和 Enrolled 在特征空间中高度重叠，无监督方法无法区分这两类
+
+Hierarchical 的 Dendrogram 进一步确认：k=2 的最高合并距离（205）比 k=3 的（158）大 30%，说明 k=2（学业困难 vs 正常）才是数据最自然的分组数。
+
+### 8.2 两条退学预测路径
+
+聚类揭示了退学学生的两个独立信号维度：
+
+- **学业路径：** 缺考（no_eval）→ 低成绩 → 低通过率 → Dropout
+- **经济路径：** 学费拖欠 → 有债务 → 经济压力 → Dropout
+
+这两条路径在连续特征热力图和二值特征交叉分析中都有独立的信号。
+
+### 8.3 跨算法一致性
+
+K-Means 和 Ward Hierarchical 独立收敛到几乎相同的三个簇（簇大小 902/275/3247 vs 830/323/3271，退学群纯度 82.0% vs 82.3%），构成了"结果真实性"的最强证据。Spectral 和 GMM 的退学群纯度分别为 92.9% 和 83.5%，进一步确认了该分组的稳健性。
+
+---
+
+## 9. 最终结论：K-Means 为最佳聚类算法
+
+### 9.1 选择理由
+
+**（1）内部指标全面最优（3/3）**——在"簇内紧密度 + 簇间分离度"这个核心标准上，K-Means 的结果最干净。
+
+**（2）与 Hierarchical (Ward) 的高度一致性**——两种完全不同范式的算法（迭代优化 vs 层次合并）独立收敛到相同结果，是无监督分析中最强的交叉验证。
+
+**（3）模型最简洁、可解释性最强**——72 个参数（GMM 需要 974 个），每个簇有一个明确的质心向量。
+
+**（4）最核心的发现已被捕捉**——82% 纯度的退学群、特征热力图的清晰画像，足以支撑 Task 4 的监督学习设计。
+
+### 9.2 其他算法的独立贡献
+
+| 算法 | 独立贡献 |
+|------|---------|
+| GMM | BIC 分析证实数据中存在特征间相关结构（full >> diag）；软概率退化证实簇边界清晰 |
+| Spectral | NMI 最高（0.211 vs K-Means 0.170），退学群纯度最高（92.9%），发现了独特的"成绩好但缺考"子群（177 人） |
+| Hierarchical | Dendrogram 揭示 k=2 才是最自然分组数；Ward 与 K-Means 的一致性交叉验证结果真实性；linkage 对比揭示了"虚假高 Silhouette"陷阱 |
+| 交叉分析 | `no_eval` 的 Cramér's V = 0.82 是最强关联；Course_171 的显著集中是特定专业退学风险的信号 |
+
+---
+
+## 10. 与 Task 2 的衔接验证
+
+| Task 2 t-SNE 观察 | Task 3 聚类验证 |
+|-------------------|----------------|
+| Graduate 和 Dropout 有空间分离 | K-Means Cluster 1 的 Dropout 纯度达 82% |
+| Enrolled 散布在两者之间，无独立聚集 | ARI/NMI 偏低（~0.17），Enrolled 无法被单独识别 |
+| 版本 A（23 连续特征）分离度优于版本 B（全 89 列） | PCA 降维后聚类效果优于高维原始空间 |
+| perplexity=5/30/50 下分离均稳定 | 四个算法都稳定地识别出退学群 |
+| Fig 3 特征着色显示 1st sem approved 梯度与 Target 对应 | 卡方检验 Top 10 中学业指标排名靠前 |
+
+---
+
+## 11. 对 Task 4 的启发
+
+### 11.1 分类目标
+
+建议同时做三分类（Dropout/Enrolled/Graduate）和二分类（Dropout vs 非 Dropout），后者对应数据的真实分界（Dendrogram k=2），预期性能更高。
+
+### 11.2 特征重要性预测
+
+基于 Task 3 的 Cramér's V 排名，预期 Task 4 的特征重要性前 5 位为：`no_eval_sem2` > `no_eval_sem1` > `2nd Grade` / `Pass Rate S2` > `Tuition fees up to date` > `economic_stress`
+
+### 11.3 类别不均衡
+
+必须使用 `class_weight='balanced'`。Enrolled 类（18%）在聚类中无独立结构，预期三分类中该类 F1 显著低于其他两类。
+
+### 11.4 可验证的预测
+
+1. 三分类的 Enrolled 召回率 < 30%
+2. Dropout 的 F1 > 0.7
+3. Decision Tree 的根节点是 `no_eval_sem2` 或 `2nd Grade`
+4. 二分类比三分类总体准确率高 10+ 个百分点
+5. 特征重要性 Top 5 与聚类发现一致
+
+---
+
+## 12. 输出文件清单
+
+### K-Means 输出（fig1–fig6）
+
+| 文件 | 内容 |
+|------|------|
+| `fig1_elbow_method.png` | Elbow Method |
+| `fig2_silhouette_scores.png` | 三合一内部指标 |
+| `fig3_kmeans_tsne_comparison.png` | t-SNE 真实 vs K-Means |
+| `fig4_kmeans_cluster_profiles.png` | 簇特征热力图 |
+| `fig5_kmeans_silhouette_detail.png` | Silhouette 轮廓图 |
+| `fig6_pca_variance.png` | PCA 累计方差 |
+| `task3_kmeans_results.csv` | 各 k 评估指标 |
+
+### GMM 输出（fig7–fig12）
+
+| 文件 | 内容 |
+|------|------|
+| `fig7_bic_aic.png` | BIC/AIC 模型选择 |
+| `fig8_gmm_tsne_comparison.png` | t-SNE 真实 vs GMM |
+| `fig9_gmm_cluster_profiles.png` | 簇特征热力图 |
+| `fig10_gmm_soft_assignment.png` | 软分配概率分析 |
+| `fig11_gmm_vs_kmeans_tsne.png` | 三合一对比 |
+| `fig12_final_comparison.png` | 指标柱状图 |
+| `task3_gmm_results.csv` | 各 k × cov 评估指标 |
+
+### Spectral 输出（fig13–fig16）
+
+| 文件 | 内容 |
+|------|------|
+| `fig13_spectral_tsne_comparison.png` | t-SNE 真实 vs Spectral |
+| `fig14_spectral_cluster_profiles.png` | 簇特征热力图 |
+| `fig15_spectral_affinity_search.png` | 参数搜索对比 |
+| `fig16_three_algo_comparison.png` | 三算法 t-SNE 对比 |
+| `task3_spectral_results.csv` | 完整搜索结果 |
+
+### Hierarchical 输出（fig17–fig21）
+
+| 文件 | 内容 |
+|------|------|
+| `fig17_dendrogram.png` | Ward Dendrogram |
+| `fig18_hierarchical_tsne_comparison.png` | t-SNE 真实 vs Hierarchical |
+| `fig19_hierarchical_cluster_profiles.png` | 簇特征热力图 |
+| `fig20_linkage_comparison.png` | 三种 linkage 对比 |
+| `fig21_all_algorithms_comparison.png` | 四算法 t-SNE 对比 |
+| `task3_hierarchical_results.csv` | 完整搜索结果 |
+
+### 交叉分析输出（fig22–fig24）
+
+| 文件 | 内容 |
+|------|------|
+| `fig22_binary_cluster_heatmap.png` | 二值特征阳性率与偏离图 |
+| `fig23_categorical_groups.png` | 9 组类别变量分布 |
+| `fig24_chi2_top_features.png` | 卡方检验关联强度排名 |
+| `task3_binary_crosstab.csv` | 完整结果表 |
+
+---
+
+## 13. 环境依赖
+
+```
+pandas >= 2.2.0
+numpy >= 1.26.0
+scikit-learn >= 1.5.0
+matplotlib >= 3.8.0
+seaborn >= 0.13.0
+scipy >= 1.12.0
+```
+
+---
+
+## 14. 复现步骤
+
+```bash
+conda activate dsaa_ml
+
+# 确保 full_preprocessed_data.csv 和所有脚本在同一目录
+# 按顺序运行（后续脚本依赖前续脚本生成的 .npy 中间文件）
+python task3_kmeans.py           # 生成 fig1-6 + .npy 中间数据
+python task3_gmm.py              # 生成 fig7-12
+python task3_spectral.py         # 生成 fig13-16
+python task3_hierarchical.py     # 生成 fig17-21
+python task3_binary_crosstab.py  # 生成 fig22-24
+```
+
+所有随机操作均设置 `random_state=42`，结果完全可复现。

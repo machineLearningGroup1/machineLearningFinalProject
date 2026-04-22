@@ -1,0 +1,8 @@
+{
+  "criterion": "gini",
+  "max_depth": 6,
+  "min_samples_split": 2,
+  "min_samples_leaf": 1,
+  "ccp_alpha": 0.003,
+  "class_weight": "balanced"
+}

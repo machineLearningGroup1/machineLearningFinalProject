@@ -1,0 +1,50 @@
+{
+  "best_params": {
+    "criterion": "entropy",
+    "max_depth": 6,
+    "min_samples_split": 2,
+    "min_samples_leaf": 1,
+    "ccp_alpha": 0.003,
+    "class_weight": "balanced"
+  },
+  "training_rows": 3096,
+  "validation_rows": 442,
+  "final_fit_rows": 3538,
+  "positive_label": "Dropout (1)",
+  "train": {
+    "accuracy": 0.8627,
+    "precision": 0.7786,
+    "recall": 0.7998,
+    "f1": 0.7891,
+    "macro_f1": 0.8437,
+    "roc_auc": 0.9194,
+    "average_precision": 0.8629
+  },
+  "val": {
+    "accuracy": 0.8439,
+    "precision": 0.7417,
+    "recall": 0.7887,
+    "f1": 0.7645,
+    "macro_f1": 0.8239,
+    "roc_auc": 0.8949,
+    "average_precision": 0.8002
+  },
+  "test": {
+    "accuracy": 0.8465,
+    "precision": 0.756,
+    "recall": 0.7719,
+    "f1": 0.7639,
+    "macro_f1": 0.8251,
+    "roc_auc": 0.8941,
+    "average_precision": 0.8226
+  },
+  "full": {
+    "accuracy": 0.8576,
+    "precision": 0.7703,
+    "recall": 0.7931,
+    "f1": 0.7816,
+    "macro_f1": 0.838,
+    "roc_auc": 0.9119,
+    "average_precision": 0.8484
+  }
+}

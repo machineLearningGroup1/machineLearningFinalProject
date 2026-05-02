@@ -1,0 +1,63 @@
+===========================================================================
+Open-ended: Feature Group Ablation Study (v2)
+===========================================================================
+
+[STEP 0] Loading data …
+  Train: (3096, 89)  |  Eval (val+test): (1328, 89)
+
+[STEP 1] Defining feature groups by functional role …
+  Academic performance (S1+S2 grades, approved, evaluations, pass_rate, no_eval)  16 features
+  Enrollment background (Admission grade, Prev qual, Application order)  4 features
+  Economic factors (Tuition, Debtor, Scholarship, economic_stress)   4 features
+  Macroeconomic (GDP, Unemployment, Inflation)                       3 features
+  Family background (parent edu/occ, family_edu_capital)             17 features
+  Demographics (Gender, age, nationality, marital, displaced)        14 features
+  Course & Application mode (one-hot encoded)                        30 features
+  grade_trend (single feature)                                       1 features
+
+  All 89 features assigned to groups.
+
+===========================================================================
+[STEP 2] Running ablation experiments
+===========================================================================
+
+  FULL                                                          wF1=0.7627  D=0.788  E=0.439  G=0.863
+  – Academic performance (S1+S2 grades, approved, evaluations, pass_rate, no_eval)  wF1=0.6314  Δ=-0.1313  D=0.676  E=0.208  G=0.754
+  – Enrollment background (Admission grade, Prev qual, Application order)  wF1=0.7691  Δ=+0.0064  D=0.795  E=0.451  G=0.867
+  – Economic factors (Tuition, Debtor, Scholarship, economic_stress)  wF1=0.7447  Δ=-0.0180  D=0.761  E=0.399  G=0.858
+  – Macroeconomic (GDP, Unemployment, Inflation)                wF1=0.7552  Δ=-0.0075  D=0.778  E=0.409  G=0.865
+  – Family background (parent edu/occ, family_edu_capital)      wF1=0.7601  Δ=-0.0026  D=0.782  E=0.424  G=0.867
+  – Demographics (Gender, age, nationality, marital, displaced)  wF1=0.7627  Δ=+0.0000  D=0.787  E=0.422  G=0.869
+  – Course & Application mode (one-hot encoded)                 wF1=0.7672  Δ=+0.0045  D=0.795  E=0.453  G=0.862
+  – grade_trend (single feature)                                wF1=0.7683  Δ=+0.0056  D=0.788  E=0.449  G=0.870
+  ONLY academic (16 features)                                   wF1=0.7134  Δ=-0.0493  D=0.730  E=0.340  G=0.837
+  ONLY enrollment background (4 features)                       wF1=0.4638  Δ=-0.2989  D=0.424  E=0.225  G=0.575
+
+[STEP 3] Plotting fig4_ablation_by_function.png …
+[STEP 4] Plotting fig5_perclass_ablation.png …
+[STEP 5] Plotting fig6_only_group_comparison.png …
+
+===========================================================================
+Ablation Study v2 — Summary
+===========================================================================
+
+  Baseline weighted F1:             0.7627
+  Martins et al. (2021) avg F1:     0.65  (indirect ref., different labels & features)
+
+  Academic features alone:          wF1 = 0.7134
+    → 93.5% of full model with 18% of features
+    → Validates Martins et al. future work hypothesis:
+      adding academic performance data substantially improves prediction
+
+  Group removal impact (sorted by drop):
+    – Academic performance (S1+S2 grades, approved, evaluations, pass_rate, no_eval)  Δ = -0.1313
+    – Economic factors (Tuition, Debtor, Scholarship, economic_stress)  Δ = -0.0180
+    – Macroeconomic (GDP, Unemployment, Inflation)                Δ = -0.0075
+    – Family background (parent edu/occ, family_edu_capital)      Δ = -0.0026
+    – Demographics (Gender, age, nationality, marital, displaced)  Δ = +0.0000
+    – Course & Application mode (one-hot encoded)                 Δ = +0.0045
+    – grade_trend (single feature)                                Δ = +0.0056
+    – Enrollment background (Admission grade, Prev qual, Application order)  Δ = +0.0064
+
+  All outputs saved to: /home/zhaojinghan0204/Machine Learning/Project/task6/feature/result/open_ended_ablation_v2
+===========================================================================

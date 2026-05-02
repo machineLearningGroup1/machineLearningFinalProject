@@ -1,0 +1,47 @@
+{
+  "best_params": {
+    "n_estimators": 300,
+    "max_depth": 20,
+    "min_samples_leaf": 5,
+    "max_features": "sqrt",
+    "class_weight": "balanced",
+    "bootstrap": true,
+    "oob_score": true
+  },
+  "best_oob": {
+    "oob_accuracy": 0.7687,
+    "oob_macro_f1": 0.7233,
+    "oob_score_value": 0.7687
+  },
+  "training_rows": 3096,
+  "test_rows": 1328,
+  "final_fit_rows": 3096,
+  "final_oob_score": 0.7687,
+  "train": {
+    "accuracy": 0.8705,
+    "macro_precision": 0.8464,
+    "macro_recall": 0.8582,
+    "macro_f1": 0.8493,
+    "weighted_f1": 0.8725,
+    "roc_auc_ovr_macro": 0.9761,
+    "roc_auc_ovr_weighted": 0.9765
+  },
+  "test": {
+    "accuracy": 0.762,
+    "macro_precision": 0.7175,
+    "macro_recall": 0.7159,
+    "macro_f1": 0.7136,
+    "weighted_f1": 0.7667,
+    "roc_auc_ovr_macro": 0.8886,
+    "roc_auc_ovr_weighted": 0.9065
+  },
+  "full": {
+    "accuracy": 0.8379,
+    "macro_precision": 0.8077,
+    "macro_recall": 0.8156,
+    "macro_f1": 0.8085,
+    "weighted_f1": 0.8408,
+    "roc_auc_ovr_macro": 0.9526,
+    "roc_auc_ovr_weighted": 0.9574
+  }
+}

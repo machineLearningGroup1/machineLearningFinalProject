@@ -1,0 +1,12 @@
+label,weighted_f1,macro_f1,f1_dropout,f1_enrolled,f1_graduate,n_features,n_removed,delta
+FULL (all 89 features),0.7627,0.6965,0.7877,0.4392,0.8627,89,0,0.0
+"– Academic performance (S1+S2 grades, approved, evaluations, pass_rate, no_eval)",0.6314,0.5463,0.6764,0.2082,0.7543,73,16,-0.13130000000000008
+"– Enrollment background (Admission grade, Prev qual, Application order)",0.7691,0.7042,0.7947,0.4513,0.8667,85,4,0.006399999999999961
+"– Economic factors (Tuition, Debtor, Scholarship, economic_stress)",0.7447,0.6728,0.7611,0.3989,0.8583,85,4,-0.018000000000000016
+"– Macroeconomic (GDP, Unemployment, Inflation)",0.7552,0.684,0.7782,0.4094,0.8645,86,3,-0.007500000000000062
+"– Family background (parent edu/occ, family_edu_capital)",0.7601,0.6908,0.7818,0.4238,0.8669,72,17,-0.0026000000000000467
+"– Demographics (Gender, age, nationality, marital, displaced)",0.7627,0.6929,0.7872,0.4225,0.8691,75,14,0.0
+– Course & Application mode (one-hot encoded),0.7672,0.7033,0.7948,0.4531,0.8621,59,30,0.0044999999999999485
+– grade_trend (single feature),0.7683,0.7024,0.7877,0.4492,0.8703,88,1,0.005599999999999938
+ONLY academic (16 features),0.7134,0.6356,0.7302,0.3398,0.8367,16,73,-0.04930000000000001
+ONLY enrollment background (4 features),0.4638,0.408,0.4242,0.2246,0.5752,4,85,-0.29890000000000005

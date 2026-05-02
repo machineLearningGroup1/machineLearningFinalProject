@@ -1,0 +1,63 @@
+=================================================================
+Open-ended: Feature Importance Cross-Model Analysis
+=================================================================
+
+[STEP 1] Loading data …
+  Train: (3096, 89)  |  Eval (val+test): (1328, 89)
+
+[STEP 2] Training models …
+  [2a] Random Forest …
+       OOB score = 0.7771
+  [2b] XGBoost …
+       Done.
+  [2c] CatBoost …
+       Done.
+
+[STEP 3] Extracting feature importances (top 20) …
+  RF top feature: pass_rate_sem2 (0.0880)
+  XGBoost top feature: Admission grade (0.0754)
+  CatBoost top feature: pass_rate_sem2 (0.1385)
+  Saved: feature_importance_table.csv
+
+[STEP 4] Plotting fig1_importance_comparison.png …
+  Saved: fig1_importance_comparison.png
+
+[STEP 5] Plotting fig2_top15_heatmap.png …
+  Saved: fig2_top15_heatmap.png
+
+[STEP 6] Plotting fig3_cramer_vs_supervised.png …
+  Saved: fig3_cramer_vs_supervised.png
+
+=================================================================
+Feature Importance Analysis — Key Findings
+=================================================================
+
+RF Top 10:
+   1. pass_rate_sem2                                0.0880 ← ENGINEERED
+   2. Curricular units 2nd sem (approved)           0.0689
+   3. Curricular units 2nd sem (grade)              0.0623
+   4. pass_rate_sem1                                0.0606 ← ENGINEERED
+   5. Curricular units 1st sem (grade)              0.0484
+   6. Admission grade                               0.0408
+   7. Curricular units 1st sem (approved)           0.0392
+   8. Previous qualification (grade)                0.0369
+   9. Curricular units 2nd sem (evaluations)        0.0353
+  10. grade_trend                                   0.0316 ← ENGINEERED
+
+XGBoost Top 10:
+   1. Admission grade                               789.0000
+   2. Previous qualification (grade)                630.0000
+   3. pass_rate_sem2                                530.0000 ← ENGINEERED
+   4. grade_trend                                   528.0000 ← ENGINEERED
+   5. Curricular units 2nd sem (grade)              498.0000
+   6. Curricular units 1st sem (grade)              475.0000
+   7. pass_rate_sem1                                453.0000 ← ENGINEERED
+   8. Curricular units 2nd sem (evaluations)        413.0000
+   9. GDP                                           390.0000
+  10. Unemployment rate                             358.0000
+
+Pearson r (Cramér's V vs supervised): 0.188
+Spearman ρ:                            0.500
+
+All outputs saved to: /home/zhaojinghan0204/Machine Learning/Project/task6/feature/result/open_ended_feature_importance
+=================================================================

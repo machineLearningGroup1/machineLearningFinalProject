@@ -150,7 +150,7 @@ Part B — 功能族群消融实验 (open_ended_ablation_v2.py)
 
 **左面板（散点图）：** x 轴 = 聚类区分力，y 轴 = 三模型平均监督重要性
 
-统计结果：**Pearson r = 0.328（p = 0.002），Spearman ρ = 0.413**——两种方法之间存在**显著的正相关**，但远非完美一致。
+统计结果：**Pearson r = 0.429（p < 0.0001），Spearman ρ = 0.589**——两种方法之间存在**高度显著的正相关**，但远非完美一致。
 
 **右面板（哑铃图）：** 对监督排名前 20 的特征，并排显示其监督排名（●）和聚类排名（◆），连线越长表示两种方法的分歧越大。
 
@@ -158,15 +158,15 @@ Part B — 功能族群消融实验 (open_ended_ablation_v2.py)
 
 | 特征 | 监督排名 | 聚类排名 | 类型 |
 |------|---------|---------|------|
-| pass_rate_sem2 ★ | 1 | 13 | 工程 |
-| pass_rate_sem1 ★ | 2 | 12 | 工程 |
-| Curricular units 2nd sem (grade) | 4 | 10 | 原始 |
-| Curricular units 1st sem (grade) | 6 | 11 | 原始 |
-| Curricular units 2nd sem (approved) | 7 | 9 | 原始 |
-| Curricular units 2nd sem (evaluations) | 9 | 14 | 原始 |
-| Curricular units 1st sem (evaluations) | 13 | 8 | 原始 |
-| Curricular units 1st sem (approved) | 14 | 7 | 原始 |
-| no_eval_sem2 ★ | 15 | 2 | 工程 |
+| pass_rate_sem2 ★ | 1 | 11 | 工程 |
+| pass_rate_sem1 ★ | 2 | 10 | 工程 |
+| Curricular units 2nd sem (grade) | 4 | 8 | 原始 |
+| Curricular units 1st sem (grade) | 6 | 9 | 原始 |
+| Curricular units 2nd sem (approved) | 7 | 7 | 原始 |
+| Curricular units 2nd sem (evaluations) | 9 | 12 | 原始 |
+| Curricular units 1st sem (evaluations) | 13 | 6 | 原始 |
+| Curricular units 1st sem (approved) | 14 | 5 | 原始 |
+| no_eval_sem2 ★ | 15 | 14 | 工程 |
 
 **共同点：** 这 9 个特征全部是**学业表现类**——两学期的成绩、通过率、考试参与情况。无论有没有标签，这些特征都能被识别为数据中最强的信号。
 
@@ -175,21 +175,23 @@ Part B — 功能族群消融实验 (open_ended_ablation_v2.py)
 | 特征 | 聚类排名 | 监督排名 | 原因分析 |
 |------|---------|---------|---------|
 | Curricular units 1st sem (credited) | 1 | 29 | 在 K-Means Cluster 0 中 z = +3.40（热力图中最深红格），定义了"高学分转入群"（275 人），但该群 63.6% 是 Graduate，退学率不高，对预测无直接价值 |
-| Curricular units 2nd sem (credited) | 3 | 33 | 同上，z = +3.26 |
-| no_eval_sem1 ★ | 4 | 53 | 聚类中区分力极强（V = 0.734），但监督模型中其信息已被 `pass_rate` 和 `grade` 完全吸收——如果 pass_rate = 0，模型已知该生"什么都没通过"，无需额外的 no_eval 标志 |
-| Curricular units 1st/2nd sem (enrolled) | 5, 6 | 21, 22 | 注册门数在聚类中驱动簇形状，但预测退学时不如通过率直接 |
-| Course_171 | 15 | 62 | 特定专业在聚类中集中，但监督模型有更多全局信号 |
+| Curricular units 2nd sem (credited) | 2 | 33 | 同上，z = +3.26 |
+| Curricular units 1st sem (enrolled) | 3 | 21 | 注册门数在聚类中驱动簇形状（连续特征方差大），但预测退学时不如通过率直接 |
+| Curricular units 2nd sem (enrolled) | 4 | 22 | 同上 |
+| prev_qual_ordinal ★ | 13 | 30 | Task 1 构建的学历等级序数特征，在聚类中对簇划分有一定贡献，但监督模型中其信息已被 `Admission grade` 和 `Previous qualification (grade)` 覆盖 |
+| no_eval_sem1 ★ | 15 | 53 | 聚类中区分力极强（V = 0.734），但监督模型中其信息已被 `pass_rate` 和 `grade` 完全吸收——如果 pass_rate = 0，模型已知该生"什么都没通过"，无需额外的 no_eval 标志 |
 
-**核心洞察：** 聚类找的是"数据中最大的几何结构差异"——`credited` 列的巨大 z-score 偏差对 K-Means 来说是压倒性的分离信号（Voronoi 划分直接被它拉开），但这个结构并不直接对应退学风险。
+**核心洞察：** 聚类找的是"数据中最大的几何结构差异"——`credited` 列的巨大 z-score 偏差对 K-Means 来说是压倒性的分离信号（Voronoi 划分直接被它拉开），但这个结构并不直接对应退学风险。`enrolled` 列同理：注册门数的绝对值差异很大，足以驱动簇形状，但预测退学时通过率才是关键。
 
 #### 3.4.3 监督学习看重但聚类不在意的特征
 
 | 特征 | 监督排名 | 聚类排名 | 原因分析 |
 |------|---------|---------|---------|
-| Admission grade | 3 | 56 | 入学成绩在各簇之间几乎无差异（热力图中 z ≈ 0），但对区分 Graduate vs Enrolled 的决策边界非常有效 |
-| Previous qualification (grade) | 5 | 85 | 同上——入学前的学术背景在聚类中完全不可见（聚类由学业表现主导），但在监督学习中提供独立预测信号 |
-| grade_trend ★ | 8 | 89（最后！）| 作为两学期成绩的差值，在聚类中完全无区分力（所有簇的 grade_trend 均 ≈ 0），但树模型的分裂决策中它被频繁选用 |
-| GDP / Unemployment rate | 10, 11 | 74, 75 | 宏观经济变量对簇结构无贡献，但在监督中有非零预测力 |
+| Admission grade | 3 | 27 | 入学成绩在各簇之间几乎无差异（热力图中 z ≈ 0），但对区分 Graduate vs Enrolled 的决策边界非常有效 |
+| Previous qualification (grade) | 5 | 54 | 同上——入学前的学术背景在聚类中完全不可见（聚类由学业表现主导），但在监督学习中提供独立预测信号 |
+| grade_trend ★ | 8 | 82 | 作为两学期成绩的差值，在聚类中几乎无区分力（所有簇的 grade_trend 均 ≈ 0），但树模型的分裂决策中它被频繁选用 |
+| GDP | 10 | 40 | 宏观经济变量对簇结构贡献甚微，但在监督中有非零预测力 |
+| Unemployment rate | 11 | 42 | 同上 |
 
 **核心洞察：** 聚类被**学业表现的绝对值**主导——谁通过了课、谁成绩高。但监督学习还需要区分 **Graduate 和 Enrolled 这两个高度重叠的类**（Task 2 t-SNE 和 Task 3 聚类均已确认它们几何不可分），此时入学前的背景信息（`Admission grade`、`Prev qual grade`）就变得关键——它们提供了学业表现以外的**独立信号维度**。
 
@@ -336,8 +338,8 @@ Martins et al. (2021) 使用的是同一数据来源（IPP）的**早期版本**
 
 | Task 3 发现 | 本次验证 |
 |------------|---------|
-| `no_eval_sem2` Cramér's V = 0.82 | 在聚类区分力中排第 2，但在监督中排第 15——信息被连续特征吸收 |
-| 四张热力图中 1st/2nd Credited z-score 最高（±3.4σ） | 聚类区分力排第 1/3，但监督排名 29/33——定义了"高学分转入群"但不直接预测退学 |
+| `no_eval_sem2` Cramér's V = 0.82 | 在聚类区分力中排第 14，但在监督中排第 15——信息被连续特征吸收 |
+| 四张热力图中 1st/2nd Credited z-score 最高（±3.4σ） | 聚类区分力排第 1/2，但监督排名 29/33——定义了"高学分转入群"但不直接预测退学 |
 | "两条退学路径"（学业 + 经济） | 消融验证：学业 Δ = -0.131，经济 Δ = -0.018，两条路径均有独立贡献 |
 | K-Means 为最佳聚类算法 | 图 3 的聚类区分力正是基于 K-Means 聚类结果计算 |
 
